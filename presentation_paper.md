@@ -16,6 +16,13 @@ been [implemented in
 clang](https://github.com/matus-chochlik/clang/tree/mirror-reflection) and is
 available for experimentation.
 
+## History
+
+* 2017-06-13. **P0578R1**. Modified to reflect the outcome of the 2016 Oulu
+  meeting where `reflexpr` was preferred to `$reflect`. An additional section
+  was added to explain the design alternatives for `get_base_name`.
+* 2016-02-04. **P0578R0**. The initial version of this paper.
+
 ## Introduction
 
 C++ provides many facilities that allow for the compile-time inspection and
@@ -33,7 +40,7 @@ Lets look at a simple example illustrating our proposed design:
 template <typename T>
 T min(const T& a, const T& b) {
   log() << "min<"
-        << get_display_name_v<$reflect(T)>
+        << get_display_name_v<reflexpr(T)>
         << ">(" << a << ", " << b << ") = ";
   T result = a < b ? a : b;
   log() << result << std::endl;
@@ -54,11 +61,11 @@ min<std::string>(hello, world)
 Note that the *type* argument as well as the value arguments are printed out.
 Our proposed reflection syntax and library is what makes this possible.
 
-The key expression is `get_display_name_v<$reflect(T)>`, which consists of two
-parts. The first is `$reflect(T)`. This expression produces a special type that
+The key expression is `get_display_name_v<reflexpr(T)>`, which consists of two
+parts. The first is `reflexpr(T)`. This expression produces a special type that
 contains meta-information concerning `T` (e.g. name, member variable, and
 inheritance information). We call these types "meta objects" following industry
-practice. `$reflect`'s argument doesn't necessarily have to be a type though;
+practice. `reflexpr`'s argument doesn't necessarily have to be a type though;
 many kinds of syntax are recognized in the general case. The second part is the
 call to `get_display_name_v`. This is where we extract a piece of information
 from the meta object, in this case the "display name". Most uses of the
@@ -110,7 +117,7 @@ reflection library built on our facilities:
 template <typename T>
 bool generic_equal(const T& a, const T& b)
 {
-  using metaT = $reflect(T);
+  using metaT = reflexpr(T);
   bool result = true;
   mirror::for_each<mirror::get_data_members_t<metaT>>(
     compare_data_members<T>{a, b, result}
@@ -162,7 +169,7 @@ Not Included:
 
 * **Building new datatypes**. We have plans to extend this proposal at some
   point with the ability to build new datatypes with an identifier generation
-  facility (`$identifier`). See the design document for more details.
+  facility. See the design document for more details.
 
 * **Reflection facilities already in C++**. As mentioned before, we're in the
   business of cooperating with existing facilities instead of replacing what
@@ -178,11 +185,9 @@ Not Included:
 
 ## Language Considerations
 
-The primary consideration at the language level was what to call the `$reflect`
-operator. Other options, such as `reflexpr` and `reflsyntax`, were considered
-unsightly and non-descriptive. We opted to use `$` as a prefix which opens the
-possibility for `$unreflect` and perhaps other new C++ keywords. This also
-improves the grep-ability of reflection operations.
+The primary consideration at the language level was what to call the `reflexpr`
+operator. There was a bikeshedding at the 2016 Kona meeting and `reflexpr` had
+the most consensus when compared to several other options.
 
 ## Library Considerations
 
@@ -268,7 +273,7 @@ important concepts and operations.
 
 ### Object
 
-The `$reflect` operation always produces a type that satisfies the `Object`
+The `reflexpr` operation always produces a type that satisfies the `Object`
 concept. `Object`s provide the ability to query source location and the
 `reflects_same` method determines whether or not two objects reflect the same
 underlying entity.
@@ -303,7 +308,7 @@ leaks, two other variants are provided.
 The `get_public_*` metafunctions return only the public members of a record.
 This operation can be used safely on third party code. The `get_accessible_*`
 metafunctions, on the other hand, will include private members as well if
-the `$reflect` operation's surrounding context allows it (e.g. it is found in a
+the `reflexpr` operation's surrounding context allows it (e.g. it is found in a
 member function or friend class). Encapsulation cannot be broken with either of
 these two variants.
 
@@ -338,19 +343,23 @@ abbreviations are elaborated and instantiated template classes return the name
 of the template class itself.
 
 ```c++
-get_base_name_v<$reflect(unsigned)>
+get_base_name_v<reflexpr(unsigned)>
 // "unsigned int"
 
 using foo = int;
-get_base_name_v<$reflect(foo)>
+get_base_name_v<reflexpr(foo)>
 // "foo"
 
-get_base_name_v<$reflect(std::vector<int>)>
+get_base_name_v<reflexpr(std::vector<int>)>
 // "vector"
 
-get_base_name_v<$reflect(volatile std::size_t* [10])>
+get_base_name_v<reflexpr(volatile std::size_t* [10])>
 // "unsigned long int"
 ```
+
+One design alternative is to omit `get_base_name` and have a `get_name`
+metafuction instead. This metafunction would only return a non-empty value if
+the type itself is a base name.
 
 #### `get_display_name`
 
@@ -360,17 +369,17 @@ to hook into the technology already used in compilers to provide human readable
 diagnostics.
 
 ```c++
-get_display_name_v<$reflect(unsigned)>
+get_display_name_v<reflexpr(unsigned)>
 // "unsigned"
 
 using foo = int;
-get_display_name_v<$reflect(foo)>
+get_display_name_v<reflexpr(foo)>
 // "foo"
 
-get_display_name_v<$reflect(std::vector<int>)>
+get_display_name_v<reflexpr(std::vector<int>)>
 // "std::vector<int>"
 
-get_display_name_v<$reflect(volatile std::size_t* [10])>
+get_display_name_v<reflexpr(volatile std::size_t* [10])>
 // "volatile std::size_t *[10]"
 ```
 
@@ -388,8 +397,8 @@ For example:
 ```c++
 using MyInt = int;
 
-get_base_name_v<$reflect(MyInt)> // "MyInt"
-get_base_name_v<get_aliased_t<$reflect(MyInt)>> // "int"
+get_base_name_v<reflexpr(MyInt)> // "MyInt"
+get_base_name_v<get_aliased_t<reflexpr(MyInt)>> // "int"
 ```
 
 Note that `get_aliased_t` always returns the true underlying type. Walking
